@@ -66,7 +66,7 @@ class GPPrior:
                             is_fitted = True
                     except RuntimeError:  # This can happen when torch.linalg.eigh fails. Restart with new init resolves this.
                         print('GP Fitting unsuccessful, retrying.. ')
-                        print(x)
+                        # print(x)
                         print(self.config)
 
             if bool(torch.any(torch.isnan(x)).detach().cpu().numpy()):
