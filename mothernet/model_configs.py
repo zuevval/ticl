@@ -128,47 +128,6 @@ def get_prior_config(max_features=100, n_samples=1024+128):
     return {'prior': prior, 'dataloader': dataloader}
 
 
-def get_mothernet_config():
-    return {'mothernet': {
-        'weight_embedding_rank': 32,
-        'low_rank_weights': True,
-        'predicted_hidden_layer_size': 512,
-        'predicted_activation': 'relu',
-        'decoder_type': "class_average",
-        'decoder_embed_dim': 1024,
-        'predicted_hidden_layers': 2,
-        'decoder_hidden_layers': 1,
-        'decoder_hidden_size': 2048,
-        'decoder_activation': 'gelu'}
-    }
-
-
-def get_additive_config():
-    return {'additive': {
-        'input_bin_embedding': 'none',
-        'factorized_output': False,
-        'output_rank': 16,
-        'bin_embedding_rank': 16,
-        'input_layer_norm': False,
-        'shape_attention': False,
-        'shape_attention_heads': 1,
-        'n_shape_functions': 32,
-        'shape_init': 'constant',
-        'n_bins': 64,
-        'nan_bin': False,
-        'sklearn_binning': False,
-        'fourier_features': 0,
-        'marginal_residual': "none",
-        'categorical_embedding': False
-
-    }}
-
-
-def get_biattention_config():
-    return {'biattention': {
-        'input_embedding': 'linear',
-    }}
-
 
 def get_shared_defaults():
     config = get_prior_config()
@@ -177,66 +136,9 @@ def get_shared_defaults():
     return config
 
 
-def get_mothernet_default_config():
-    config = get_shared_defaults()
-    config.update(get_mothernet_config())
-    return config
-
-
-def get_additive_default_config():
-    config = get_shared_defaults()
-    config.update(get_mothernet_config())
-    config.update(get_additive_config())
-    config['mothernet']['decoder_type'] = 'class_average'
-    config['mothernet']['decoder_hidden_size'] = 512
-    return config
-
-
-def get_baam_default_config():
-    config = get_shared_defaults()
-    config.update(get_mothernet_config())
-    config.update(get_additive_config())
-    config.update(get_biattention_config())
-    config['prior']['classification']['pad_zeros'] = False
-    config['mothernet']['decoder_type'] = 'class_average'
-    config['mothernet']['decoder_hidden_size'] = 512
-    return config
-
-
-def get_perceiver_default_config():
-    config = get_shared_defaults()
-    config['perceiver'] = {'num_latents': 512}
-    config.update(get_mothernet_config())
-    config['mothernet']['decoder_type'] = 'output_attention'
-    return config
-
-
-def get_tabpfn_default_config():
-    config = get_shared_defaults()
-    return config
-
-
-def get_batabpfn_default_config():
-    config = get_shared_defaults()
-    config.update(get_biattention_config())
-    config['biattention']['input_embedding'] = 'fourier'
-    config['prior']['classification']['pad_zeros'] = False
-    return config
-
-
 def get_model_default_config(model_type):
-    if model_type == 'mothernet':
-        config = get_mothernet_default_config()
-    elif model_type == 'batabpfn':
-        config = get_batabpfn_default_config()
-    elif model_type == 'tabpfn':
-        config = get_tabpfn_default_config()
-    elif model_type == 'additive':
-        config = get_additive_default_config()
-    elif model_type == 'baam':
-        config = get_baam_default_config()
-    elif model_type == 'perceiver':
-        config = get_perceiver_default_config()
+    if model_type == 'tabpfn':
+        config = get_shared_defaults()
     else:
         raise ValueError(f"Unknown model type {model_type}")
     config['model_type'] = model_type
