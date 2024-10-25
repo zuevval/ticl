@@ -36,10 +36,10 @@ def train_epoch(model, aggregate_k_gradients, using_dist, scaler, dl, device, op
     ignore_steps = 0
     steps_per_epoch = len(dl)
     assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
-    if progress_bar:
+    if progress_bar:  # not used BUT is a good idea
         dl = tqdm(dl)
     for batch, (data, targets, single_eval_pos) in enumerate(dl):
-        if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
+        if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):  # not used - no distributed
             cm = model.no_sync()
         else:
             cm = nullcontext()
@@ -87,16 +87,6 @@ def train(dl, model, criterion, optimizer_state=None, scheduler=None,
     criterion.to(device)
 
     n_out = model.n_out
-    if using_dist:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
-        if rank == 0:
-            print("Distributed training")
-    elif "cuda" in device:
-        print(f"Single GPU training on {torch.cuda.get_device_name()}")
-    elif "cpu" in device:
-        pass
-    else:
-        raise ValueError(f"Invalid device: {device}")
 
     if rank == 0:
         model.learning_rates = getattr(model, 'learning_rates', [])
@@ -116,10 +106,6 @@ def train(dl, model, criterion, optimizer_state=None, scheduler=None,
     if scheduler is None:
         if learning_rate_schedule == 'cosine':
             base_scheduler = CosineAnnealingLR(optimizer, T_max=epochs - warmup_epochs, eta_min=min_lr)
-        elif learning_rate_schedule == 'exponential':
-            base_scheduler = ExponentialLR(optimizer, gamma=lr_decay, min_lr=min_lr)
-        elif learning_rate_schedule == 'constant':
-            base_scheduler = ExponentialLR(optimizer, gamma=1, min_lr=min_lr)
         else:
             raise ValueError(f"Invalid learning rate schedule: {learning_rate_schedule}")
         # add linear warmup to scheduler

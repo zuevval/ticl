@@ -26,7 +26,7 @@ class TabPFN(nn.Module):
             if all_layers_same_init else TransformerEncoderDiffInit(encoder_layer_creator, nlayers)
         self.emsize = emsize
         self.encoder = Linear(n_features, emsize, replace_nan_by_zero=True)
-        self.decoder = decoder(emsize, nhid, n_out) if decoder is not None else nn.Sequential(nn.Linear(emsize, nhid), nn.GELU(), nn.Linear(nhid, n_out))
+        self.decoder = nn.Sequential(nn.Linear(emsize, nhid), nn.GELU(), nn.Linear(nhid, n_out))
         self.input_ln = SeqBN(emsize) if input_normalization else None
         self.init_method = init_method
         self.efficient_eval_masking = efficient_eval_masking
@@ -51,7 +51,7 @@ class TabPFN(nn.Module):
         assert isinstance(src, tuple), 'inputs (src) have to be given as (x,y) or (style,x,y) tuple'
 
         if len(src) == 3:  # style is given
-            style_src, x_src, y_src = src
+            _, x_src, y_src = src
         else:
             x_src, y_src = src
         x_src = self.encoder(x_src)

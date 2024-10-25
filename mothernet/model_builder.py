@@ -160,28 +160,13 @@ def get_model(config, device, should_train=True, verbose=False, model_state=None
               scheduler=None, epoch_callback=None, load_model_strict=True):
     passed_config = config.copy()
 
-    # backwards compatibility for model names
-    if 'model_type' not in passed_config:
-        if 'model_maker' in passed_config:
-            passed_config['model_type'] = passed_config.pop('model_maker')
-        else:
-            passed_config['model_type'] = 'tabpfn'
-
     config = get_model_default_config(passed_config['model_type'])
 
-    if 'optimizer' not in passed_config:
-        passed_config = old_config_to_new(passed_config, config)
     config.update(passed_config)
     verbose_train, verbose_prior = verbose >= 1, verbose >= 2
     config['verbose'] = verbose_prior
 
     criterion = get_criterion(config['prior']['classification']['max_num_classes'])
-
-    # backwards compatibility for cases where absence of parameter doesn't correspond to current default
-    if 'n_samples' not in passed_config['prior']:
-        config['prior']['n_samples'] = config['bptt']
-    if 'y_encoder' not in passed_config['transformer']:
-        config['transformer']['y_encoder'] = 'linear'
 
     y_encoder = get_y_encoder(config)
 
@@ -198,21 +183,8 @@ def get_model(config, device, should_train=True, verbose=False, model_state=None
     else:
         raise ValueError(f"Unknown model type {model_type}.")
 
-    if model_state is not None:
-        if not load_model_strict:
-            for k, v in model.state_dict().items():
-                if k in model_state and model_state[k].shape != v.shape:
-                    model_state.pop(k)
-        model.load_state_dict(model_state, strict=load_model_strict)
-
     if verbose:
         print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
-
-    if 'losses' in config:
-        # for continuing training
-        model.losses = config['losses']
-        model.learning_rates = config['learning_rates']
-        model.wallclock_times = config.get('wallclock_times', [])
 
     if should_train:
         dl = get_dataloader(prior_config=config['prior'], dataloader_config=config['dataloader'], device=device)

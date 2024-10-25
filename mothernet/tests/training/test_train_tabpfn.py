@@ -3,7 +3,7 @@ import tempfile
 import lightning as L
 import pytest
 
-from mothernet.fit_model import main
+from mothernet.fit_model import main  # TODO return
 from mothernet.models.tabpfn import TabPFN
 from mothernet.prediction import TabPFNClassifier
 

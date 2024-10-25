@@ -79,26 +79,8 @@ def main(argv, extra_config=None):
 
     save_every = orchestration.save_every
 
-    model_state, optimizer_state, scheduler = None, None, None
-    if warm_start_weights is not None:
-        model_state, old_optimizer_state, old_scheduler, old_config = torch.load(
-            warm_start_weights, map_location='cpu')
-        module_prefix = 'module.'
-        model_state = {k.replace(module_prefix, ''): v for k, v in model_state.items()}
-        if args.orchestration.continue_run:
-            config = old_config
-            # we want to overwrite specific parts of the old config with current values
-            config['device'] = device
-            config['orchestration']['warm_start_from'] = warm_start_weights
-            config['orchestration']['continue_run'] = True
-            optimizer_state = old_optimizer_state
-            config['orchestration']['stop_after_epochs'] = args.orchestration.stop_after_epochs
-            if not args.orchestration.restart_scheduler:
-                scheduler = old_scheduler
-        else:
-            print("WARNING warm starting with new settings")
-            compare_dicts(config, old_config)
-
+    optimizer_state, scheduler = None, None
+    # no warm start
     if config['orchestration']['detect_anomaly']:
         print("ENABLING GRADIENT DEBUGGING (detect-anomaly)! Don't use for training.")
         torch.autograd.set_detect_anomaly(True)
@@ -107,56 +89,11 @@ def main(argv, extra_config=None):
     save_callback = make_training_callback(save_every, model_string, base_path, report, config, orchestration.no_mlflow,
                                            orchestration.st_checkpoint_dir, classification=config['transformer']['classification_task'], validate=orchestration.validate)
 
-    mlflow_hostname = os.environ.get("MLFLOW_HOSTNAME", None)
-    if orchestration.use_wandb:
-        wandb.init(
-            dir='.',
-            project='mothernet',
-            entity='tabpfn_interpretability',
-            id=model_string,
-            config={k: v for k, v in flatten_dict(config).items() if k not in ['wallclock_times', 'losses', 'learning_rates']},
-        )
-    if orchestration.no_mlflow or mlflow_hostname is None:
-        print("Not logging run with mlflow, set MLFLOW_HOSTNAME environment to variable enable mlflow.")
-        total_loss, model, dl, epoch = get_model(config, device, should_train=True, verbose=1, epoch_callback=save_callback, model_state=model_state,
+    # no MLFlow and WanDB
+    total_loss, model, dl, epoch = get_model(config, device, should_train=True, verbose=1, epoch_callback=save_callback,
                                                  optimizer_state=optimizer_state, scheduler=scheduler,
                                                  load_model_strict=orchestration.continue_run or orchestration.load_strict)
-    else:
-        print(f"Logging run with mlflow at host {mlflow_hostname}")
-        mlflow.set_tracking_uri(f"http://{mlflow_hostname}:5000")
-
-        tries = 0
-        while tries < 5:
-            try:
-                mlflow.set_experiment(orchestration.experiment)
-                break
-            except:
-                tries += 1
-                print(f"Failed to set experiment, retrying {tries}/5")
-                time.sleep(5)
-
-        if orchestration.continue_run and not orchestration.create_new_run:
-            # find run id via mlflow
-            run_ids = mlflow.search_runs(filter_string=f"attribute.run_name='{model_string}'")['run_id']
-            if len(run_ids) > 1:
-                raise ValueError(f"Found more than one run with name {model_string}")
-            if len(run_ids) < 1:
-                raise ValueError(f"Found no run with name {model_string}")
-            run_id = run_ids.iloc[0]
-            run_args = {'run_id': run_id}
-
-        else:
-            run_args = {'run_name': model_string}
-
-        path = os.path.dirname(os.path.abspath(__file__))
-        run_args['tags'] = {'mlflow.source.git.commit': Repo(path, search_parent_directories=True).head.object.hexsha}
-
-        with mlflow.start_run(**run_args):
-            mlflow.log_params({k: v for k, v in flatten_dict(config).items() if k not in ['wallclock_times', 'losses', 'learning_rates']})
-            total_loss, model, dl, epoch = get_model(config, device, should_train=True, verbose=1, epoch_callback=save_callback, model_state=model_state,
-                                                     optimizer_state=optimizer_state, scheduler=scheduler,
-                                                     load_model_strict=orchestration.continue_run or orchestration.load_strict)
-
+    
     if rank == 0:
         save_callback(model, None, None, "on_exit")
     return {'loss': total_loss, 'model': model, 'dataloader': dl,

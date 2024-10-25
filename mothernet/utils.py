@@ -418,15 +418,6 @@ def make_training_callback(save_every, model_string, base_path, report, config, 
 
         if epoch != "on_exit":
             wallclock_ticker = max(1, int(model.wallclock_times[-1]//(60 * 5)))
-            if not no_mlflow:
-                mlflow.log_metric(key="wallclock_time", value=model.wallclock_times[-1], step=epoch)
-                mlflow.log_metric(key="loss", value=model.losses[-1], step=epoch)
-                mlflow.log_metric(key="learning_rate", value=model.learning_rates[-1], step=epoch)
-                mlflow.log_metric(key="wallclock_ticker", value=wallclock_ticker, step=epoch)
-                mlflow.log_metric(key="epoch", value=epoch, step=epoch)
-            if wandb.run is not None:
-                wandb.log({"loss": model.losses[-1], "learning_rate": model.learning_rates[-1], "wallclock_time": model.wallclock_times[-1],
-                           "wallclock_ticker": wallclock_ticker, "epoch": epoch})
             if report is not None:
                 # synetune callback
                 report(epoch=epoch, loss=model.losses[-1], wallclock_time=wallclock_ticker)  # every 5 minutes
@@ -532,12 +523,7 @@ def get_init_method(init_method):
 def validate_model(model, config):
     from mothernet.datasets import load_openml_list, open_cc_valid_dids, open_cc_valid_dids_regression
 
-    from mothernet.models.biattention_additive_mothernet import BiAttentionMotherNetAdditive
-    from mothernet.models.mothernet_additive import MotherNetAdditive
-    from mothernet.models.mothernet import MotherNet
     from mothernet.models.tabpfn import TabPFN
-    from mothernet.models.perceiver import TabPerceiver
-    from mothernet.models.biattention_tabpfn import BiAttentionTabPFN
     from mothernet.prediction import MotherNetAdditiveClassifier, MotherNetClassifier, TabPFNClassifier, MotherNetAdditiveRegressor 
     from mothernet.evaluation.tabular_evaluation import eval_on_datasets
     from mothernet.evaluation import tabular_metrics
@@ -548,13 +534,7 @@ def validate_model(model, config):
             open_cc_valid_dids, multiclass=True, shuffled=True, filter_for_nan=False, max_samples=10000,
             num_feats=100, return_capped=True, classification=True)
 
-        if isinstance(model, (BiAttentionMotherNetAdditive, MotherNetAdditive)):
-            clf = MotherNetAdditiveClassifier(device=config['device'], model=model, config=config)
-        elif isinstance(model, MotherNet):
-            clf = MotherNetClassifier(device=config['device'], model=model, config=config)
-        elif isinstance(model, TabPerceiver):
-            clf = MotherNetClassifier(device=config['device'], model=model, config=config)
-        elif isinstance(model, (TabPFN, BiAttentionTabPFN)):
+        if isinstance(model, TabPFN):
             clf = TabPFNClassifier(device=config['device'], model=model, config=config, N_ensemble_configurations=1)
         else:
             raise ValueError(f"Model {model} not supported for validation")
@@ -568,20 +548,4 @@ def validate_model(model, config):
         per_dataset_scores = {key: np.mean([g['mean_metric'] for g in group]) for key, group in itertools.groupby(results, lambda x: x['dataset'])}
         return mean_auc, per_dataset_scores
     else:
-        cc_valid_datasets_regression, _ = load_openml_list(
-            open_cc_valid_dids_regression, multiclass=False, shuffled=True, filter_for_nan=False, max_samples=10000,
-            num_feats=100, return_capped=False, classification=False)
-
-        if isinstance(model, (BiAttentionMotherNetAdditive, MotherNetAdditive)):
-            clf = MotherNetAdditiveRegressor(device=config['device'], model=model, config=config)
-        else:
-            raise ValueError(f"Model {model} not supported for validation")
-        base_path = 'models_diff/validation'
-        results = eval_on_datasets('regression', clf, f"valid_run_{uuid4()}", cc_valid_datasets_regression,
-                                   metric_used=tabular_metrics.root_mean_squared_error_metric, split_numbers=[1, 2, 3, 4, 5],
-                                   eval_positions=[1000], max_times=[1], n_samples=2000, base_path=base_path,
-                                   overwrite=False, n_jobs=1, device=config['device'], save=False)
-        mean_auc = np.array([r['mean_metric'] for r in results]).mean()
-        # maybe pandas would be easier lol?
-        per_dataset_scores = {key: np.mean([g['mean_metric'] for g in group]) for key, group in itertools.groupby(results, lambda x: x['dataset'])}
-        return mean_auc, per_dataset_scores
+        raise ValueError()
