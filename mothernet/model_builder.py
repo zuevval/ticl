@@ -8,12 +8,7 @@ import mothernet.models.encoders as encoders
 from mothernet.dataloader import get_dataloader
 from mothernet.train import train
 from mothernet.model_configs import get_model_default_config
-from mothernet.models.mothernet_additive import MotherNetAdditive
-from mothernet.models.perceiver import TabPerceiver
 from mothernet.models.tabpfn import TabPFN
-from mothernet.models.biattention_tabpfn import BiAttentionTabPFN
-from mothernet.models.biattention_additive_mothernet import BiAttentionMotherNetAdditive
-from mothernet.models.mothernet import MotherNet
 from mothernet.config_utils import nested_dict
 
 try:
@@ -142,8 +137,6 @@ def old_config_to_new(old_config, new_config):
         # we used to store mothernet parameters in tabpfn models, but we no longer allow that
         ignored_configs.extend(['decoder_embed_dim', 'decoder_hidden_size', 'predicted_hidden_layer_size',
                                 'predicted_hidden_layers', 'weight_embedding_rank', 'decoder_hidden_layers'])
-    if old_config['model_type'] in ['mothernet', 'additive']:
-        ignored_configs.extend(['num_latents'])
     for k in ignored_configs:
         old_config.pop(k, None)
     translated_config = nested_dict()
@@ -174,8 +167,6 @@ def get_model(config, device, should_train=True, verbose=False, model_state=None
         else:
             passed_config['model_type'] = 'tabpfn'
 
-    if passed_config['model_type'] == 'mlp':
-        passed_config['model_type'] = 'mothernet'
     config = get_model_default_config(passed_config['model_type'])
 
     if 'optimizer' not in passed_config:
@@ -192,15 +183,6 @@ def get_model(config, device, should_train=True, verbose=False, model_state=None
     if 'y_encoder' not in passed_config['transformer']:
         config['transformer']['y_encoder'] = 'linear'
 
-    if 'mothernet' in config:
-        if 'decoder_activation' not in passed_config['mothernet']:
-            config['mothernet']['decoder_activation'] = 'relu'
-        if 'decoder_type' not in passed_config['mothernet']:
-            config['mothernet']['decoder_type'] = 'output_attention'
-        if (passed_config['mothernet'].get('weight_embedding_rank', None) is not None
-                and 'low_rank_weights' not in passed_config['mothernet']):
-            config['mothernet']['low_rank_weights'] = True
-
     y_encoder = get_y_encoder(config)
 
     if config['prior']['classification']['max_num_classes'] > 2:
@@ -211,31 +193,8 @@ def get_model(config, device, should_train=True, verbose=False, model_state=None
     model_type = config['model_type']
     n_features = config['prior']['num_features']
 
-    if model_type == "mothernet":
-        model = MotherNet(
-            n_out=n_out,
-            y_encoder_layer=y_encoder, n_features=n_features, **config['transformer'], **config['mothernet'])
-    elif model_type == 'perceiver':
-        model = TabPerceiver(n_out=n_out, y_encoder_layer=y_encoder, n_features=n_features,
-                             **config['transformer'], **config['mothernet'], **config['perceiver'])
-    elif model_type == "additive":
-        model = MotherNetAdditive(
-            n_out=n_out, n_features=n_features,
-            y_encoder_layer=y_encoder, **config['transformer'], **config['mothernet'], **config['additive'])
-    elif model_type == "tabpfn":
+    if model_type == "tabpfn":
         model = TabPFN(n_out=n_out, n_features=n_features, y_encoder_layer=y_encoder, **config['transformer'])
-    elif model_type == "batabpfn":
-        # FIXME hack
-        config['transformer']['nhead'] = 4
-        model = BiAttentionTabPFN(
-            n_out=n_out, y_encoder_layer=y_encoder, **config['transformer'], **config['biattention'])
-    elif model_type == "baam":
-        # FIXME hack
-        config['transformer']['nhead'] = 4
-        model = BiAttentionMotherNetAdditive(
-            n_out=n_out, n_features=config['prior']['num_features'],
-            y_encoder_layer=y_encoder, **config['transformer'], **config['mothernet'], **config['additive'])
-
     else:
         raise ValueError(f"Unknown model type {model_type}.")
 
