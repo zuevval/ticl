@@ -4,6 +4,7 @@ import random
 import shutil
 import warnings
 import urllib.request
+import pandas as pd
 from tqdm import tqdm
 import mlflow
 import wandb
@@ -17,6 +18,38 @@ from torch.optim.optimizer import Optimizer
 from mothernet.model_configs import get_model_default_config
 from mothernet.config_utils import flatten_dict
 import itertools
+
+def load_ihdp_data(ihdp_path: Path) -> tuple[pd.DataFrame, list[str], str]:
+    ihdp_cols = [s[:-1] for s in np.loadtxt(ihdp_path / "columns.txt", dtype=str)][:-2]
+    ihdp_cols.extend([f"x{i}" for i in range(2, 26)])
+    print(ihdp_cols[:7])
+
+    csvs = []
+    for csv_path in (ihdp_path / "csv").glob("*.csv"):
+        csvs.append(pd.read_csv(csv_path, header=None))
+        break # TODO choose a table, for now using the first table
+    data = pd.concat(csvs)
+    data.columns = ihdp_cols
+
+    y_col_name = "delta_y"
+    data[y_col_name] = (data["y_cfactual"] - data["y_factual"]) * (-1) ** data["treatment"]
+    exclude_cols = ["treatment", "y_cfactual", "y_factual", "mu0", "mu1"]
+    return data, exclude_cols, y_col_name
+
+def generate_data(dataset_size: int) -> tuple[pd.DataFrame, list[str], str]:
+    np.random.seed(42)
+    data = pd.DataFrame({
+        "age": np.random.randint(low=0, high=70, size=dataset_size),
+        "gender": np.random.choice(2, size=dataset_size),
+        "temperature": np.random.uniform(low=35.5, high=38.5, size=dataset_size),
+        "treatment": np.random.choice(2, size=dataset_size)
+    })
+    y_col_name = "y"
+    data[y_col_name] = 2 * (80 - data["age"]) \
+        + 15 * (data["temperature"] - 35.5) * data["treatment"] \
+            + 1.5 * np.random.randn(dataset_size)
+    exclude_cols = ["treatment"]
+    return data, exclude_cols, y_col_name
 
 class DownloadProgressBar(tqdm):
     def update_to(self, b=1, bsize=1, tsize=None):
